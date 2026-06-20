@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtual environments
+venv/
+env/
+.venv/
+
+# Environment variables
+.env
+.env.local
+.env.production
+
+# Data files (too large for git)
+backend/data/*.csv
+
+# IDE
+.DS_Store
+.vscode/
+.idea/
+*.swp
+
+# Logs
+*.log

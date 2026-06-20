@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ParkIQ — Parking Intelligence</title>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="css/style.css">
+</head>
+
+<body>
+
+    <!-- Loading Overlay -->
+    <div class="loading-overlay">
+        <div class="spinner-ring"></div>
+        <p class="loading-text">Loading dashboard...</p>
+    </div>
+
+    <!-- Toasts -->
+    <div class="toast-container"></div>
+
+    <!-- ══ HEADER ══ -->
+    <header class="header">
+        <div class="logo">
+            <div class="logo-icon">🅿</div>
+            <h1>ParkIQ</h1>
+            <span class="ai-badge">AI-Powered</span>
+        </div>
+
+        <div class="header-center">
+            <button class="nav-tab active" onclick="switchTab('analytics')">Analytics</button>
+            <button class="nav-tab" onclick="switchTab('ai')">AI Insights</button>
+        </div>
+
+        <div class="header-right">
+            <span id="last-updated"></span>
+            <label class="upload-btn" for="csv-file-input">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                    <polyline points="17 8 12 3 7 8" />
+                    <line x1="12" y1="3" x2="12" y2="15" />
+                </svg>
+                Upload CSV
+                <input type="file" id="csv-file-input" accept=".csv">
+            </label>
+            <button class="icon-btn" id="theme-btn" title="Toggle theme">🌙</button>
+        </div>
+    </header>
+
+    <!-- ══ KPI STRIP ══ -->
+    <div class="kpi-strip">
+        <div class="kpi-card">
+            <div class="kpi-icon blue">📊</div>
+            <div class="kpi-info">
+                <div class="kpi-label">Total Violations</div>
+                <div class="kpi-value" id="stat-total">—</div>
+                <div class="kpi-sub">Records analyzed</div>
+            </div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-icon orange">🔥</div>
+            <div class="kpi-info">
+                <div class="kpi-label">Hotspot Clusters</div>
+                <div class="kpi-value" id="stat-clusters">—</div>
+                <div class="kpi-sub">DBSCAN detected</div>
+            </div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-icon red">⚠️</div>
+            <div class="kpi-info">
+                <div class="kpi-label">Critical Zones</div>
+                <div class="kpi-value" id="stat-critical">—</div>
+                <div class="kpi-sub">Score ≥ 75</div>
+            </div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-icon green">⏱</div>
+            <div class="kpi-info">
+                <div class="kpi-label">Avg Resolution</div>
+                <div class="kpi-value" id="stat-resolution">—</div>
+                <div class="kpi-sub">Per violation</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ══ WORKSPACE ══ -->
+    <div class="workspace">
+
+        <!-- MAP -->
+        <div class="map-panel">
+            <div id="map"></div>
+
+            <!-- Floating layer controls -->
+            <div class="map-controls">
+                <div class="map-control-group">
+                    <button class="map-ctrl-btn active" id="heatmap-toggle-btn">
+                        <span class="map-ctrl-dot" style="background:#f43f5e;box-shadow:0 0 6px #f43f5e"></span>
+                        Heatmap
+                    </button>
+                    <button class="map-ctrl-btn active" id="clusters-toggle-btn">
+                        <span class="map-ctrl-dot" style="background:#3b82f6;box-shadow:0 0 6px #3b82f6"></span>
+                        Clusters
+                    </button>
+                </div>
+                <div class="map-control-group"
+                    style="font-size:0.7rem;padding:7px 10px;color:#475569;line-height:1.6;pointer-events:none">
+                    <div style="color:#94a3b8;font-weight:600;margin-bottom:3px">Priority</div>
+                    <div><span style="color:#f43f5e">●</span> Critical</div>
+                    <div><span style="color:#f97316">●</span> High</div>
+                    <div><span style="color:#f59e0b">●</span> Medium</div>
+                    <div><span style="color:#10b981">●</span> Low</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- SIDEBAR -->
+        <div class="sidebar">
+            <div class="sidebar-tabs">
+                <button class="s-tab active" data-tab="analytics">Charts</button>
+                <button class="s-tab" data-tab="ai">AI Recs</button>
+                <button class="s-tab" data-tab="qa">Ask AI</button>
+            </div>
+
+            <div class="sidebar-content">
+
+                <!-- Charts Tab -->
+                <div class="tab-pane active" id="tab-analytics">
+                    <div class="section-title">Hourly Pattern</div>
+                    <div class="chart-wrap">
+                        <div class="chart-head">
+                            <span class="chart-title">Violations by Hour</span>
+                            <span style="font-size:0.7rem;color:#f97316">■ Peak hours</span>
+                        </div>
+                        <div class="chart-box"><canvas id="hourly-chart"></canvas></div>
+                    </div>
+
+                    <div class="section-title">Violation Types</div>
+                    <div class="chart-wrap">
+                        <div class="chart-head"><span class="chart-title">Distribution</span></div>
+                        <div class="chart-box"><canvas id="violation-type-chart"></canvas></div>
+                    </div>
+
+                    <div class="section-title">Weekly Trend</div>
+                    <div class="chart-wrap">
+                        <div class="chart-head"><span class="chart-title">Violations per Week</span></div>
+                        <div class="chart-box"><canvas id="weekly-chart"></canvas></div>
+                    </div>
+
+                    <div class="section-title">Top Junctions</div>
+                    <div class="chart-wrap">
+                        <div class="chart-head"><span class="chart-title">Highest Violation Count</span></div>
+                        <div class="chart-box" style="height:200px"><canvas id="junctions-chart"></canvas></div>
+                    </div>
+                </div>
+
+                <!-- AI Recommendations Tab -->
+                <div class="tab-pane" id="tab-ai">
+                    <div class="ai-section-header">
+                        <div class="ai-dot"></div>
+                        <span style="font-size:0.82rem;font-weight:600">AI Enforcement Recommendations</span>
+                    </div>
+                    <div id="recommendations-container">
+                        <div class="empty-state">
+                            <h3>Loading recommendations...</h3>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Ask AI Tab -->
+                <div class="tab-pane" id="tab-qa">
+                    <div class="ai-section-header">
+                        <div class="ai-dot"></div>
+                        <span style="font-size:0.82rem;font-weight:600">Ask the AI Analyst</span>
+                    </div>
+                    <p style="font-size:0.77rem;color:#475569;margin-bottom:14px;line-height:1.5">
+                        Ask anything about the violation data. The AI has full context of clusters, junctions, and
+                        patterns.
+                    </p>
+
+                    <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px">
+                        <button onclick="askQuestion('Which junctions need urgent enforcement today?')"
+                            style="background:var(--bg-raised);border:1px solid var(--border);color:var(--text-2);padding:8px 12px;border-radius:6px;font-size:0.75rem;cursor:pointer;text-align:left;font-family:inherit;transition:all .2s">💡
+                            Which junctions need urgent enforcement today?</button>
+                        <button onclick="askQuestion('What is the peak time for violations?')"
+                            style="background:var(--bg-raised);border:1px solid var(--border);color:var(--text-2);padding:8px 12px;border-radius:6px;font-size:0.75rem;cursor:pointer;text-align:left;font-family:inherit;transition:all .2s">💡
+                            What is the peak time for violations?</button>
+                        <button onclick="askQuestion('Which vehicle types cause the most congestion?')"
+                            style="background:var(--bg-raised);border:1px solid var(--border);color:var(--text-2);padding:8px 12px;border-radius:6px;font-size:0.75rem;cursor:pointer;text-align:left;font-family:inherit;transition:all .2s">💡
+                            Which vehicle types cause the most congestion?</button>
+                    </div>
+
+                    <div class="qa-wrap">
+                        <div class="qa-label">Custom Question</div>
+                        <div class="qa-input-row">
+                            <input type="text" id="ai-question" placeholder="Ask about the data...">
+                            <button id="ask-btn">Ask</button>
+                        </div>
+                        <div id="ai-response"></div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="js/config.js"></script>
+    <script src="js/map.js"></script>
+    <script src="js/charts.js"></script>
+    <script src="js/ai_chat.js"></script>
+    <script src="js/app.js"></script>
+</body>
+
+</html>
