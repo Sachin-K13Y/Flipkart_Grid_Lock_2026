@@ -6,6 +6,7 @@ var API_BASE = (function () {
     if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
         return 'http://localhost:8000';
     }
-    // Production — Render backend URL (update this after deploying to Render)
-    return 'https://parkiq-api.onrender.com';
+    // Production — Render backend URL
+    // REPLACE THIS with your actual Render URL after deployment
+    return 'https://parkiq-api-XXXXX.onrender.com';
 })();
