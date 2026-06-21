@@ -1,0 +1,21 @@
+name: Keep Render Backend Alive
+
+on:
+  schedule:
+    # Runs every 14 minutes (GitHub Actions minimum is 5 min, but 14 avoids rate limits)
+    - cron: '*/14 * * * *'
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping ParkIQ Backend
+        run: |
+          response=$(curl -s -o /dev/null -w "%{http_code}" https://flipkart-grid-lock-2026-2.onrender.com/)
+          echo "Status: $response"
+          if [ "$response" = "200" ]; then
+            echo "✅ Backend is alive!"
+          else
+            echo "⚠️ Backend returned $response"
+          fi
