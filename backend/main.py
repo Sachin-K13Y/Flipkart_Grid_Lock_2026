@@ -43,16 +43,58 @@ app_state = {
 
 def _load_synthetic_data_background():
     """
-    Run the full analytics pipeline on synthetic data in a background thread.
+    Load real parking violation data from precomputed_data.json.
 
-    Running this in a thread (started 3 seconds after the server is up)
-    means Render's health-check sees a live / (200 OK) immediately, and the
-    memory-heavy scikit-learn + numpy work is spread over time rather than
-    all happening during the synchronous startup phase.
+    Falls back to generating synthetic data if the JSON file is not found.
+    Runs in a background thread so the server health-check passes immediately.
     """
     import time
-    time.sleep(3)          # Let the server fully bind and pass the health-check first
+    import json as _json
+    import os as _os
 
+    time.sleep(2)  # Let the server bind and pass health-check first
+
+    json_path = _os.path.join(_os.path.dirname(__file__), "data", "precomputed_data.json")
+
+    # ── Try loading pre-computed real data first ────────────────────────────
+    if _os.path.exists(json_path):
+        try:
+            print("ParkIQ: Loading precomputed real data...", flush=True)
+            with open(json_path, "r") as f:
+                data = _json.load(f)
+
+            import pandas as pd
+
+            # Reconstruct minimal DataFrames from JSON
+            clusters_df = pd.DataFrame(data.get("clusters", []))
+            if not clusters_df.empty and "impact_score" not in clusters_df.columns:
+                # Add impact_score if missing (older JSON)
+                clusters_df["impact_score"] = clusters_df.get("violation_count", 0) / 10
+
+            # Build a lightweight df from map_points for hotspot endpoints
+            mp = data.get("map_points", [])
+            df = pd.DataFrame(mp) if mp else pd.DataFrame()
+            if not df.empty:
+                df = df.rename(columns={"violation_type": "vtype"})
+
+            app_state["df"]              = df
+            app_state["clusters"]        = clusters_df
+            app_state["time_stats"]      = data.get("time_stats", {})
+            app_state["recommendations"] = None   # Will be fetched from /api/recommendations
+            app_state["last_updated"]    = data.get("dashboard", {}).get("last_updated",
+                                            datetime.utcnow().isoformat())
+            # Stash dashboard summary for /api/dashboard endpoint
+            app_state["dashboard"]       = data.get("dashboard", {})
+
+            total = data.get("dashboard", {}).get("total_violations", 0)
+            nclusters = len(clusters_df)
+            print(f"ParkIQ: Loaded real data — {total:,} violations, {nclusters} clusters.", flush=True)
+            return
+
+        except Exception as e:
+            print(f"ParkIQ: precomputed JSON load failed: {e} — falling back to synthetic.", flush=True)
+
+    # ── Fallback: generate synthetic data ───────────────────────────────────
     try:
         from core.loader import generate_synthetic_data
         from core.clustering import run_dbscan, get_cluster_summaries
@@ -60,40 +102,25 @@ def _load_synthetic_data_background():
         from core.time_analysis import compute_temporal_stats
         from core.recommender import generate_enforcement_recommendations
 
-        print("ParkIQ: Background loader — generating synthetic data...", flush=True)
-
-        # Stage 1: Generate synthetic dataset
+        print("ParkIQ: Generating synthetic demo data...", flush=True)
         df = generate_synthetic_data()
-
-        # Stage 2: Cluster with DBSCAN
         df_labeled = run_dbscan(df)
         labels = df_labeled["cluster_label"].values
         cluster_summaries = get_cluster_summaries(df_labeled, labels)
-
-        # Stage 3: Compute impact scores
         scored_clusters = compute_impact_scores(cluster_summaries)
-
-        # Stage 4: Temporal stats
         time_stats = compute_temporal_stats(df)
-
-        # Stage 5: AI enforcement recommendations (top 5 clusters)
         recommendations = generate_enforcement_recommendations(scored_clusters, top_n=5)
 
-        # Store results in shared state
-        app_state["df"] = df_labeled
-        app_state["clusters"] = scored_clusters
-        app_state["time_stats"] = time_stats
+        app_state["df"]              = df_labeled
+        app_state["clusters"]        = scored_clusters
+        app_state["time_stats"]      = time_stats
         app_state["recommendations"] = recommendations
-        app_state["last_updated"] = datetime.utcnow().isoformat()
+        app_state["last_updated"]    = datetime.utcnow().isoformat()
+        app_state["dashboard"]       = {}
 
-        print(
-            f"ParkIQ: Background loader done — "
-            f"{len(df)} records, {len(scored_clusters)} clusters.",
-            flush=True,
-        )
-
+        print(f"ParkIQ: Synthetic data ready — {len(df)} records.", flush=True)
     except Exception as e:
-        print(f"ParkIQ: Warning — background data load failed: {e}", flush=True)
+        print(f"ParkIQ: Warning — data load failed: {e}", flush=True)
 
 
 # ---------------------------------------------------------------------------

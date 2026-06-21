@@ -51,24 +51,6 @@ def _to_python(value):
 
 @router.get("/dashboard")
 def get_dashboard() -> JSONResponse:
-    """
-    Return high-level summary metrics for the dashboard cards.
-
-    Returns
-    -------
-    200 JSONResponse  ::
-        {
-          "total_violations":       <int>,
-          "active_clusters":        <int>,
-          "critical_zones":         <int>,
-          "avg_resolution_minutes": <float>,
-          "last_updated":           "<ISO-8601 string>",
-          "date_range":             {"from": "<ISO>", "to": "<ISO>"}
-        }
-
-    400 HTTPException
-        Raised when no data has been loaded yet.
-    """
     state = get_app_state()
 
     if state["df"] is None:
@@ -77,59 +59,54 @@ def get_dashboard() -> JSONResponse:
             detail="No data loaded. Please upload a CSV first.",
         )
 
+    # ── Use precomputed dashboard stats if available (real data path) ────────
+    precomputed = state.get("dashboard", {})
+    if precomputed.get("total_violations"):
+        return JSONResponse(content={
+            "total_violations":       int(precomputed.get("total_violations", 0)),
+            "active_clusters":        int(precomputed.get("active_clusters", 0)),
+            "critical_zones":         int(precomputed.get("critical_zones", 0)),
+            "avg_resolution_minutes": float(precomputed.get("avg_resolution_minutes", 0.0)),
+            "last_updated":           state.get("last_updated") or datetime.utcnow().isoformat(),
+            "date_range":             precomputed.get("date_range", {"from": "", "to": ""}),
+        })
+
+    # ── Compute from df for synthetic / uploaded data ────────────────────────
     df = state["df"]
     clusters = state["clusters"]
 
-    # --- total violations (all rows in the cleaned / labelled DataFrame) ---
     total_violations = int(len(df))
 
-    # --- active clusters (excludes noise label -1) ---
     active_clusters = 0
     if clusters is not None and not clusters.empty:
         active_clusters = int(len(clusters))
 
-    # --- critical zones ---
     critical_zones = 0
-    if (
-        clusters is not None
-        and not clusters.empty
-        and "priority_tier" in clusters.columns
-    ):
+    if clusters is not None and not clusters.empty and "priority_tier" in clusters.columns:
         critical_zones = int((clusters["priority_tier"] == "Critical").sum())
 
-    # --- avg resolution minutes ---
     avg_resolution_minutes = 0.0
     if "resolution_minutes" in df.columns:
         mean_val = df["resolution_minutes"].mean()
-        # mean() returns NaN if no valid values exist
-        if mean_val != mean_val:  # NaN check without importing math
-            avg_resolution_minutes = 0.0
-        else:
+        if mean_val == mean_val:  # not NaN
             avg_resolution_minutes = round(float(mean_val), 1)
 
-    # --- date range ---
     date_range = {"from": "", "to": ""}
     if "created_datetime" in df.columns:
         date_strings = df["created_datetime"].dropna().astype(str)
         if not date_strings.empty:
-            date_range = {
-                "from": min(date_strings),
-                "to":   max(date_strings),
-            }
+            date_range = {"from": min(date_strings), "to": max(date_strings)}
 
-    # --- last updated ---
     last_updated = state.get("last_updated") or datetime.utcnow().isoformat()
 
-    return JSONResponse(
-        content={
-            "total_violations":       total_violations,
-            "active_clusters":        active_clusters,
-            "critical_zones":         critical_zones,
-            "avg_resolution_minutes": avg_resolution_minutes,
-            "last_updated":           last_updated,
-            "date_range":             date_range,
-        }
-    )
+    return JSONResponse(content={
+        "total_violations":       total_violations,
+        "active_clusters":        active_clusters,
+        "critical_zones":         critical_zones,
+        "avg_resolution_minutes": avg_resolution_minutes,
+        "last_updated":           last_updated,
+        "date_range":             date_range,
+    })
 
 
 # ---------------------------------------------------------------------------

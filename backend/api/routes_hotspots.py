@@ -119,47 +119,36 @@ async def get_hotspots() -> JSONResponse:
 
 @router.get("/heatmap-data")
 async def get_heatmap_data() -> JSONResponse:
-    """
-    Return lat/lon/weight points for the Leaflet heatmap layer.
-
-    Points are derived from every raw violation record in state["df"].
-    Counts are grouped by location (rounded to 4 decimal places) and
-    normalised to [0, 1].  The response is capped at 5 000 points; if
-    the grid has more distinct locations a uniform sub-sample is returned.
-
-    Returns
-    -------
-    {"points": [[lat, lon, weight], ...]}
-    """
     state = get_app_state()
     df = state.get("df")
 
     if df is None:
         raise HTTPException(status_code=400, detail=_NO_DATA_DETAIL)
 
-    # Extract lat / lon columns
-    lats = df["latitude"].astype(float)
-    lons = df["longitude"].astype(float)
+    # Support both column naming conventions
+    import pandas as pd
+    if "lat" in df.columns and "lon" in df.columns:
+        lats = df["lat"].astype(float)
+        lons = df["lon"].astype(float)
+    elif "latitude" in df.columns and "longitude" in df.columns:
+        lats = df["latitude"].astype(float)
+        lons = df["longitude"].astype(float)
+    else:
+        return JSONResponse(content={"points": []})
 
-    # Round to 4 decimal places (~11 m precision) and group by location
     rounded_lats = lats.round(4)
     rounded_lons = lons.round(4)
 
-    import pandas as pd
-    location_series = pd.Series(
-        list(zip(rounded_lats, rounded_lons))
-    )
+    location_series = pd.Series(list(zip(rounded_lats, rounded_lons)))
     counts = location_series.value_counts()
 
     max_count = int(counts.max()) if len(counts) > 0 else 1
 
-    # Build list of [lat, lon, weight]
     points = [
         [float(lat), float(lon), float(count) / max_count]
         for (lat, lon), count in counts.items()
     ]
 
-    # Cap at 5 000 points using uniform sampling
     if len(points) > 5000:
         step = len(points) / 5000
         points = [points[int(i * step)] for i in range(5000)]
