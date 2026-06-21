@@ -8,5 +8,5 @@ var API_BASE = (function () {
     }
     // Production — Render backend URL
     // REPLACE THIS with your actual Render URL after deployment
-    return 'https://parkiq-api-XXXXX.onrender.com';
+    return 'https://flipkart-grid-lock-2026-2.onrender.com';
 })();
