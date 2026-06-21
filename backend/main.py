@@ -8,6 +8,8 @@ on startup so the dashboard is immediately usable without a CSV upload.
 
 import os
 import sys
+import threading
+from contextlib import asynccontextmanager
 from datetime import datetime
 
 from fastapi import FastAPI
@@ -33,53 +35,24 @@ app_state = {
     "last_updated": None,
 }
 
-# ---------------------------------------------------------------------------
-# FastAPI application
-# ---------------------------------------------------------------------------
-app = FastAPI(
-    title="ParkIQ API",
-    version="1.0.0",
-    description="AI-Driven Parking Violation Intelligence System",
-)
-
-# Enable CORS for all origins (development)
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 # ---------------------------------------------------------------------------
-# Register routers
+# Background loader — runs in a thread so it never blocks the server from
+# accepting requests, and never OOM-kills the process during startup.
 # ---------------------------------------------------------------------------
-app.include_router(upload_router, prefix="/api")
-app.include_router(dashboard_router, prefix="/api")
-app.include_router(hotspots_router, prefix="/api")
-app.include_router(ai_insights_router, prefix="/api")
 
-
-# ---------------------------------------------------------------------------
-# Root health-check endpoint
-# ---------------------------------------------------------------------------
-@app.get("/")
-def root():
-    return {"status": "ok", "message": "ParkIQ API running"}
-
-
-# ---------------------------------------------------------------------------
-# Startup: auto-load synthetic data so the dashboard works immediately
-# ---------------------------------------------------------------------------
-@app.on_event("startup")
-async def startup_load_synthetic_data():
+def _load_synthetic_data_background():
     """
-    Run the full analytics pipeline on synthetic data at server startup.
+    Run the full analytics pipeline on synthetic data in a background thread.
 
-    This populates app_state so all dashboard endpoints return meaningful
-    data even before the user uploads a real CSV file.  Errors are caught
-    and logged to stdout; they do NOT abort the server startup.
+    Running this in a thread (started 3 seconds after the server is up)
+    means Render's health-check sees a live / (200 OK) immediately, and the
+    memory-heavy scikit-learn + numpy work is spread over time rather than
+    all happening during the synchronous startup phase.
     """
+    import time
+    time.sleep(3)          # Let the server fully bind and pass the health-check first
+
     try:
         from core.loader import generate_synthetic_data
         from core.clustering import run_dbscan, get_cluster_summaries
@@ -87,7 +60,7 @@ async def startup_load_synthetic_data():
         from core.time_analysis import compute_temporal_stats
         from core.recommender import generate_enforcement_recommendations
 
-        print("ParkIQ: Loading synthetic data for demo...")
+        print("ParkIQ: Background loader — generating synthetic data...", flush=True)
 
         # Stage 1: Generate synthetic dataset
         df = generate_synthetic_data()
@@ -114,12 +87,67 @@ async def startup_load_synthetic_data():
         app_state["last_updated"] = datetime.utcnow().isoformat()
 
         print(
-            f"ParkIQ: Synthetic data loaded. "
-            f"{len(df)} records, {len(scored_clusters)} clusters."
+            f"ParkIQ: Background loader done — "
+            f"{len(df)} records, {len(scored_clusters)} clusters.",
+            flush=True,
         )
 
     except Exception as e:
-        print(f"ParkIQ: Warning — synthetic data startup failed: {e}")
+        print(f"ParkIQ: Warning — background data load failed: {e}", flush=True)
+
+
+# ---------------------------------------------------------------------------
+# Lifespan — starts the background loader thread after the server is up
+# ---------------------------------------------------------------------------
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup: kick off the background thread
+    t = threading.Thread(target=_load_synthetic_data_background, daemon=True)
+    t.start()
+    yield
+    # Shutdown: nothing to clean up (thread is daemon, will die with process)
+
+
+# ---------------------------------------------------------------------------
+# FastAPI application
+# ---------------------------------------------------------------------------
+app = FastAPI(
+    title="ParkIQ API",
+    version="1.0.0",
+    description="AI-Driven Parking Violation Intelligence System",
+    lifespan=lifespan,
+)
+
+# Enable CORS for all origins (development)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# ---------------------------------------------------------------------------
+# Register routers
+# ---------------------------------------------------------------------------
+app.include_router(upload_router, prefix="/api")
+app.include_router(dashboard_router, prefix="/api")
+app.include_router(hotspots_router, prefix="/api")
+app.include_router(ai_insights_router, prefix="/api")
+
+
+# ---------------------------------------------------------------------------
+# Root health-check endpoint
+# ---------------------------------------------------------------------------
+@app.get("/")
+def root():
+    ready = app_state["df"] is not None
+    return {
+        "status": "ok",
+        "message": "ParkIQ API running",
+        "data_ready": ready,
+    }
 
 
 # ---------------------------------------------------------------------------

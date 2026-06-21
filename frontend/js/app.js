@@ -69,6 +69,84 @@ function toggleTheme() {
     localStorage.setItem('parkiq-theme', dark ? 'light' : 'dark');
 }
 
+// ── Wake-up banner (shown while Render free-tier cold-starts) ──────────────
+function showWakeUpBanner() {
+    if (document.getElementById('wakeup-banner')) return;
+    const banner = document.createElement('div');
+    banner.id = 'wakeup-banner';
+    banner.innerHTML = `
+        <span>⏳ Backend is waking up on Render free tier — this takes ~30 seconds. Retrying automatically…</span>
+        <div id="wakeup-dots" style="display:inline-block;margin-left:6px">
+            <span class="dot">.</span><span class="dot">.</span><span class="dot">.</span>
+        </div>`;
+    Object.assign(banner.style, {
+        position: 'fixed', top: '0', left: '0', right: '0', zIndex: '9999',
+        background: 'linear-gradient(90deg,#f97316,#f43f5e)',
+        color: '#fff', textAlign: 'center', padding: '10px 16px',
+        fontSize: '0.82rem', fontWeight: '600', letterSpacing: '0.01em',
+        boxShadow: '0 2px 12px rgba(249,115,22,0.4)'
+    });
+    document.body.prepend(banner);
+
+    // Animate dots
+    let i = 0;
+    const dots = banner.querySelectorAll('.dot');
+    setInterval(() => {
+        dots.forEach((d, j) => { d.style.opacity = j === i % 3 ? '1' : '0.2'; });
+        i++;
+    }, 400);
+}
+
+function hideWakeUpBanner() {
+    document.getElementById('wakeup-banner')?.remove();
+}
+
+// ── Fetch with timeout + auto-retry until backend is alive ─────────────────
+let _backendAlive = false;
+let _retryTimer = null;
+
+async function waitForBackend() {
+    if (_backendAlive) return true;
+    try {
+        const controller = new AbortController();
+        const tid = setTimeout(() => controller.abort(), 8000);
+        const r = await fetch(`${API_BASE}/`, { signal: controller.signal });
+        clearTimeout(tid);
+        if (r.ok) { _backendAlive = true; return true; }
+    } catch (_) {}
+    return false;
+}
+
+async function loadAllData() {
+    const alive = await waitForBackend();
+    if (!alive) {
+        showWakeUpBanner();
+        hideLoading();  // Un-block the UI — show the skeleton dashboard
+        _retryTimer = setTimeout(async () => {
+            const retry = await waitForBackend();
+            if (retry) {
+                hideWakeUpBanner();
+                showToast('✅ Backend is live! Loading data…', 'success');
+                showLoading('Loading dashboard data...');
+                try {
+                    await Promise.all([loadDashboardStats(), refreshAllCharts(), loadRecommendations()]);
+                    setTimeout(() => { if (typeof refreshMap === 'function') refreshMap(); }, 200);
+                } finally { hideLoading(); }
+            } else {
+                // Try again after another 10s
+                _retryTimer = setTimeout(loadAllData, 10000);
+            }
+        }, 10000);
+        return;
+    }
+
+    hideWakeUpBanner();
+    try {
+        await Promise.all([loadDashboardStats(), refreshAllCharts(), loadRecommendations()]);
+        setTimeout(() => { if (typeof refreshMap === 'function') refreshMap(); }, 200);
+    } finally { hideLoading(); }
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
     // Restore theme
     if (localStorage.getItem('parkiq-theme') === 'light') {
@@ -121,10 +199,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Init map
     if (typeof initMap === 'function') initMap();
 
-    // Load data
-    showLoading('Loading dashboard...');
-    try {
-        await Promise.all([loadDashboardStats(), refreshAllCharts(), loadRecommendations()]);
-        setTimeout(() => { if (typeof refreshMap === 'function') refreshMap(); }, 200);
-    } finally { hideLoading(); }
+    // Load data — with cold-start awareness
+    showLoading('Connecting to backend...');
+    await loadAllData();
 });
