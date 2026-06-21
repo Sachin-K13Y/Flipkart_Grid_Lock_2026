@@ -189,7 +189,7 @@ app.include_router(ai_insights_router, prefix="/api")
 
 
 # ---------------------------------------------------------------------------
-# Root health-check endpoint
+# Root & Health-check endpoints
 # ---------------------------------------------------------------------------
 @app.get("/")
 def root():
@@ -199,6 +199,18 @@ def root():
         "message": "ParkIQ API running",
         "data_ready": ready,
     }
+
+@app.get("/api/health")
+def health_check():
+    """Explicit health check endpoint to keep the backend awake."""
+    ready = app_state["df"] is not None
+    return {
+        "status": "ok",
+        "timestamp": datetime.utcnow().isoformat(),
+        "data_ready": ready,
+        "message": "Backend is alive and ready to serve requests."
+    }
+
 
 
 # ---------------------------------------------------------------------------
