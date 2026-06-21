@@ -42,19 +42,63 @@ async function loadDashboardStats() {
 
 async function handleFileUpload(file) {
     if (!file) return;
-    showLoading('Uploading & analyzing 298k records...');
+
+    // ── Validate file ──────────────────────────────────────────────────────
+    if (!file.name.toLowerCase().endsWith('.csv')) {
+        showToast('❌ Please upload a .csv file', 'error'); return;
+    }
+    const maxMB = 200;
+    if (file.size > maxMB * 1024 * 1024) {
+        showToast(`❌ File too large (max ${maxMB}MB). Pre-process large files locally.`, 'error'); return;
+    }
+
+    // ── Stage display ──────────────────────────────────────────────────────
+    const sizeMB = (file.size / (1024 * 1024)).toFixed(1);
+    const stages = [
+        `📤 Uploading ${file.name} (${sizeMB} MB)...`,
+        '🔍 Cleaning & filtering records...',
+        '🗺️ Running DBSCAN clustering...',
+        '📊 Computing time stats & impact scores...',
+        '🤖 Generating AI recommendations...',
+    ];
+    let stageIdx = 0;
+    showLoading(stages[0]);
+    const stageTimer = setInterval(() => {
+        stageIdx = Math.min(stageIdx + 1, stages.length - 1);
+        const t = document.querySelector('.loading-text');
+        if (t) t.textContent = stages[stageIdx];
+    }, 4000);
+
     const fd = new FormData();
     fd.append('file', file);
+
     try {
         const r = await fetch(`${API_BASE}/api/upload`, { method: 'POST', body: fd });
         const d = await r.json();
-        if (!r.ok) { showToast(d.detail || 'Upload failed', 'error'); return; }
-        showToast(`✓ ${(d.records_processed || 0).toLocaleString()} records · ${d.clusters_found || 0} clusters`, 'success');
-        await Promise.all([loadDashboardStats(), refreshMap(), refreshAllCharts(), loadRecommendations()]);
+        clearInterval(stageTimer);
+
+        if (!r.ok) {
+            showToast(`❌ ${d.detail || 'Upload failed'}`, 'error');
+            return;
+        }
+
+        const rec = (d.records_processed || 0).toLocaleString();
+        const cls = d.clusters_found || 0;
+        const crit = d.critical_zones || 0;
+        showToast(`✅ ${rec} records · ${cls} clusters · ${crit} critical zones`, 'success');
+
+        // Refresh all panels with new data
+        await Promise.all([loadDashboardStats(), refreshAllCharts(), loadRecommendations()]);
+        setTimeout(() => { if (typeof refreshMap === 'function') refreshMap(); }, 200);
+
     } catch (e) {
-        showToast(`Upload error: ${e.message}`, 'error');
-    } finally { hideLoading(); }
+        clearInterval(stageTimer);
+        showToast(`❌ Upload error: ${e.message}`, 'error');
+    } finally {
+        hideLoading();
+    }
 }
+
 
 function switchTab(name) {
     document.querySelectorAll('.s-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));

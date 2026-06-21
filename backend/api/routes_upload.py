@@ -142,11 +142,12 @@ async def upload_csv(file: UploadFile = File(...)) -> JSONResponse:
     # 4. Store results in shared app_state
     # ------------------------------------------------------------------
     state = get_app_state()
-    state["df"] = df_labeled
-    state["clusters"] = scored_clusters
-    state["time_stats"] = time_stats
+    state["df"]              = df_labeled
+    state["clusters"]        = scored_clusters
+    state["time_stats"]      = time_stats
     state["recommendations"] = recommendations
-    state["last_updated"] = datetime.utcnow().isoformat()
+    state["last_updated"]    = datetime.utcnow().isoformat()
+    state["dashboard"]       = {}   # Reset so dashboard route recomputes from df
 
     # ------------------------------------------------------------------
     # 5. Compute summary metrics for the response
