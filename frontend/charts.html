@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ParkIQ — Analytics</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="js/config.js"></script>
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --bg: #0d1117;
+            --bg-card: #161b22;
+            --bg-raised: #1c2333;
+            --border: rgba(255,255,255,0.07);
+            --text-1: #f1f5f9;
+            --text-2: #94a3b8;
+            --accent: #f97316;
+            --blue: #3b82f6;
+            --indigo: #6366f1;
+            --red: #f43f5e;
+        }
+
+        body {
+            background: var(--bg);
+            color: var(--text-1);
+            font-family: 'Inter', system-ui, sans-serif;
+            min-height: 100vh;
+        }
+
+        /* ── Header ── */
+        .page-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 14px 32px;
+            background: var(--bg-card);
+            border-bottom: 1px solid var(--border);
+            position: sticky; top: 0; z-index: 100;
+            backdrop-filter: blur(12px);
+        }
+
+        .logo-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .logo-icon {
+            width: 36px; height: 36px;
+            background: linear-gradient(135deg, #f97316, #f43f5e);
+            border-radius: 10px;
+            display: grid; place-items: center;
+            font-size: 1.1rem; font-weight: 800;
+        }
+
+        .logo-title {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 1.2rem; font-weight: 700;
+            background: linear-gradient(90deg, #f1f5f9, #94a3b8);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        }
+
+        .page-badge {
+            background: rgba(99,102,241,0.15);
+            border: 1px solid rgba(99,102,241,0.3);
+            color: #818cf8;
+            font-size: 0.72rem; font-weight: 600;
+            padding: 3px 10px; border-radius: 20px;
+            letter-spacing: 0.04em; text-transform: uppercase;
+        }
+
+        .back-btn {
+            display: flex; align-items: center; gap: 6px;
+            background: var(--bg-raised);
+            border: 1px solid var(--border);
+            color: var(--text-2);
+            padding: 7px 16px; border-radius: 8px;
+            font-family: 'Inter', sans-serif; font-size: 0.82rem;
+            cursor: pointer; text-decoration: none;
+            transition: all 0.2s;
+        }
+        .back-btn:hover { color: var(--text-1); border-color: rgba(255,255,255,0.15); }
+
+        /* ── KPI Strip ── */
+        .kpi-strip {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+            padding: 24px 32px 0;
+        }
+
+        .kpi-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 16px 20px;
+            display: flex; align-items: center; gap: 14px;
+            transition: transform 0.2s;
+        }
+        .kpi-card:hover { transform: translateY(-2px); }
+
+        .kpi-icon {
+            width: 42px; height: 42px; border-radius: 10px;
+            display: grid; place-items: center; font-size: 1.2rem; flex-shrink: 0;
+        }
+        .kpi-icon.blue { background: rgba(59,130,246,0.15); }
+        .kpi-icon.orange { background: rgba(249,115,22,0.15); }
+        .kpi-icon.red { background: rgba(244,63,94,0.15); }
+        .kpi-icon.green { background: rgba(16,185,129,0.15); }
+
+        .kpi-label { font-size: 0.72rem; color: var(--text-2); font-weight: 500; }
+        .kpi-value { font-size: 1.5rem; font-weight: 800; font-family: 'Space Grotesk', sans-serif; color: var(--text-1); }
+        .kpi-sub { font-size: 0.68rem; color: var(--text-2); margin-top: 2px; }
+
+        /* ── Charts Grid ── */
+        .charts-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            padding: 24px 32px 32px;
+        }
+
+        .chart-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 20px 22px;
+            transition: box-shadow 0.25s;
+        }
+        .chart-card:hover {
+            box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+        }
+        .chart-card.full-width { grid-column: 1 / -1; }
+
+        .chart-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 18px;
+        }
+
+        .chart-card-title {
+            font-size: 0.95rem; font-weight: 700;
+            font-family: 'Space Grotesk', sans-serif;
+            color: var(--text-1);
+        }
+
+        .chart-card-sub {
+            font-size: 0.72rem; color: var(--text-2);
+            margin-top: 3px;
+        }
+
+        .chart-badge {
+            font-size: 0.67rem; font-weight: 600;
+            padding: 3px 9px; border-radius: 20px;
+            white-space: nowrap;
+        }
+        .chart-badge.orange { background: rgba(249,115,22,0.15); color: #f97316; border: 1px solid rgba(249,115,22,0.2); }
+        .chart-badge.blue   { background: rgba(59,130,246,0.15);  color: #3b82f6; border: 1px solid rgba(59,130,246,0.2); }
+        .chart-badge.indigo { background: rgba(99,102,241,0.15); color: #818cf8; border: 1px solid rgba(99,102,241,0.2); }
+        .chart-badge.green  { background: rgba(16,185,129,0.15);  color: #10b981; border: 1px solid rgba(16,185,129,0.2); }
+
+        .chart-canvas-wrap {
+            position: relative;
+            height: 240px;
+        }
+        .chart-canvas-wrap.tall { height: 320px; }
+
+        /* ── Loading & Error ── */
+        .loading-overlay {
+            display: none;
+            position: fixed; inset: 0; z-index: 1000;
+            background: rgba(13,17,23,0.75);
+            backdrop-filter: blur(4px);
+            place-items: center;
+        }
+        .loading-overlay.show { display: grid; }
+        .spinner { width: 40px; height: 40px; border: 3px solid rgba(255,255,255,0.1); border-top-color: #f97316; border-radius: 50%; animation: spin 0.7s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .status-bar {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 32px;
+            font-size: 0.75rem;
+            color: var(--text-2);
+        }
+
+        .status-dot {
+            width: 7px; height: 7px; border-radius: 50%;
+            background: #10b981;
+            box-shadow: 0 0 8px #10b981;
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
+
+        @media (max-width: 900px) {
+            .charts-grid { grid-template-columns: 1fr; }
+            .kpi-strip { grid-template-columns: repeat(2,1fr); }
+            .page-header { padding: 12px 16px; }
+            .charts-grid { padding: 16px; }
+            .kpi-strip { padding: 16px 16px 0; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="loading-overlay" id="loader"><div class="spinner"></div></div>
+
+    <!-- ══ HEADER ══ -->
+    <header class="page-header">
+        <div class="logo-row">
+            <div class="logo-icon">🅿</div>
+            <div>
+                <div class="logo-title">ParkIQ</div>
+            </div>
+            <span class="page-badge">Analytics</span>
+        </div>
+        <div class="status-bar" style="padding:0">
+            <div class="status-dot" id="status-dot"></div>
+            <span id="status-text">Loading data...</span>
+        </div>
+        <a href="index.html" class="back-btn">
+            ← Back to Dashboard
+        </a>
+    </header>
+
+    <!-- ══ KPI STRIP ══ -->
+    <div class="kpi-strip">
+        <div class="kpi-card">
+            <div class="kpi-icon blue">📊</div>
+            <div>
+                <div class="kpi-label">Total Violations</div>
+                <div class="kpi-value" id="kpi-total">—</div>
+                <div class="kpi-sub">Jan – May 2023</div>
+            </div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-icon orange">🔥</div>
+            <div>
+                <div class="kpi-label">Hotspot Clusters</div>
+                <div class="kpi-value" id="kpi-clusters">—</div>
+                <div class="kpi-sub">DBSCAN detected</div>
+            </div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-icon red">⚠️</div>
+            <div>
+                <div class="kpi-label">Peak Hour Violations</div>
+                <div class="kpi-value" id="kpi-peak">—</div>
+                <div class="kpi-sub">7-9 AM &amp; 5-8 PM</div>
+            </div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-icon green">📍</div>
+            <div>
+                <div class="kpi-label">Top Junction</div>
+                <div class="kpi-value" style="font-size:0.95rem" id="kpi-top-junction">—</div>
+                <div class="kpi-sub">Highest violations</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ══ CHARTS GRID ══ -->
+    <div class="charts-grid">
+
+        <!-- Hourly Pattern -->
+        <div class="chart-card">
+            <div class="chart-card-header">
+                <div>
+                    <div class="chart-card-title">Violations by Hour</div>
+                    <div class="chart-card-sub">24-hour distribution across all records</div>
+                </div>
+                <span class="chart-badge orange">■ Peak Hours</span>
+            </div>
+            <div class="chart-canvas-wrap">
+                <canvas id="hourly-chart"></canvas>
+            </div>
+        </div>
+
+        <!-- Violation Types -->
+        <div class="chart-card">
+            <div class="chart-card-header">
+                <div>
+                    <div class="chart-card-title">Violation Type Distribution</div>
+                    <div class="chart-card-sub">Breakdown of offense categories</div>
+                </div>
+                <span class="chart-badge blue">Top 6</span>
+            </div>
+            <div class="chart-canvas-wrap">
+                <canvas id="violation-type-chart"></canvas>
+            </div>
+        </div>
+
+        <!-- Weekly Trend -->
+        <div class="chart-card">
+            <div class="chart-card-header">
+                <div>
+                    <div class="chart-card-title">Weekly Trend</div>
+                    <div class="chart-card-sub">Violations per week over the reporting period</div>
+                </div>
+                <span class="chart-badge indigo">Trend</span>
+            </div>
+            <div class="chart-canvas-wrap">
+                <canvas id="weekly-chart"></canvas>
+            </div>
+        </div>
+
+        <!-- Day of Week -->
+        <div class="chart-card">
+            <div class="chart-card-header">
+                <div>
+                    <div class="chart-card-title">Day of Week Pattern</div>
+                    <div class="chart-card-sub">Which days see the most violations</div>
+                </div>
+                <span class="chart-badge green">Weekly</span>
+            </div>
+            <div class="chart-canvas-wrap">
+                <canvas id="dow-chart"></canvas>
+            </div>
+        </div>
+
+        <!-- Top Junctions — full width -->
+        <div class="chart-card full-width">
+            <div class="chart-card-header">
+                <div>
+                    <div class="chart-card-title">Top 10 Junctions by Violations</div>
+                    <div class="chart-card-sub">Real Bangalore traffic police junction data</div>
+                </div>
+                <span class="chart-badge orange">Hotspot Ranking</span>
+            </div>
+            <div class="chart-canvas-wrap tall">
+                <canvas id="junctions-chart"></canvas>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        const PEAK_HOURS = new Set([7, 8, 9, 17, 18, 19, 20]);
+        const PALETTE = ['#3b82f6','#6366f1','#f97316','#f43f5e','#f59e0b','#10b981','#06b6d4','#a855f7','#ec4899','#84cc16'];
+        const GRID_COLOR = 'rgba(255,255,255,0.05)';
+        const TICK_COLOR = '#475569';
+
+        Chart.defaults.font.family = 'Inter, system-ui, sans-serif';
+
+        function setStatus(text, ok = true) {
+            document.getElementById('status-text').textContent = text;
+            document.getElementById('status-dot').style.background = ok ? '#10b981' : '#f43f5e';
+            document.getElementById('status-dot').style.boxShadow = ok ? '0 0 8px #10b981' : '0 0 8px #f43f5e';
+        }
+
+        function formatNum(n) {
+            if (!n && n !== 0) return '—';
+            return n >= 1000 ? (n / 1000).toFixed(1) + 'K' : n.toString();
+        }
+
+        function renderHourly(data) {
+            const hours = Array.from({length:24},(_,i)=>String(i));
+            const counts = hours.map(h => data.hourly?.[h] || 0);
+            const peakCount = counts.filter((_,i) => PEAK_HOURS.has(i)).reduce((a,b)=>a+b,0);
+            document.getElementById('kpi-peak').textContent = formatNum(peakCount);
+
+            const ctx = document.getElementById('hourly-chart').getContext('2d');
+            const grad = ctx.createLinearGradient(0,0,0,200);
+            grad.addColorStop(0,'rgba(59,130,246,0.9)'); grad.addColorStop(1,'rgba(99,102,241,0.6)');
+            const pGrad = ctx.createLinearGradient(0,0,0,200);
+            pGrad.addColorStop(0,'rgba(249,115,22,0.9)'); pGrad.addColorStop(1,'rgba(244,63,94,0.7)');
+
+            new Chart(ctx, {
+                type:'bar',
+                data:{
+                    labels: hours.map(h => h+'h'),
+                    datasets:[{
+                        data:counts,
+                        backgroundColor: hours.map(h=>PEAK_HOURS.has(+h)?pGrad:grad),
+                        borderRadius:5, borderSkipped:false,
+                    }]
+                },
+                options:{
+                    responsive:true, maintainAspectRatio:false,
+                    plugins:{legend:{display:false}, tooltip:{
+                        backgroundColor:'rgba(13,17,23,0.95)', titleColor:'#f1f5f9', bodyColor:'#94a3b8',
+                        borderColor:'rgba(255,255,255,0.1)', borderWidth:1,
+                        callbacks:{title:t=>`Hour ${t[0].label.replace('h','')}:00`}
+                    }},
+                    scales:{
+                        y:{beginAtZero:true, grid:{color:GRID_COLOR}, ticks:{color:TICK_COLOR, font:{size:11}}},
+                        x:{grid:{display:false}, ticks:{color:TICK_COLOR, font:{size:9}, maxRotation:0}}
+                    }
+                }
+            });
+        }
+
+        function renderViolationTypes(data) {
+            const top = (data.violation_types||[]).slice(0,6);
+            if (!top.length) return;
+            const ctx = document.getElementById('violation-type-chart').getContext('2d');
+            new Chart(ctx, {
+                type:'doughnut',
+                data:{
+                    labels:top.map(v=>v.violation_type),
+                    datasets:[{
+                        data:top.map(v=>v.count),
+                        backgroundColor:PALETTE, borderWidth:2, borderColor:'#0d1117', hoverOffset:8
+                    }]
+                },
+                options:{
+                    responsive:true, maintainAspectRatio:false, cutout:'62%',
+                    plugins:{
+                        legend:{position:'bottom', labels:{color:TICK_COLOR, padding:12, font:{size:11},
+                            generateLabels: chart => {
+                                const d = chart.data;
+                                const total = d.datasets[0].data.reduce((a,b)=>a+b,0);
+                                return d.labels.map((l,i)=>({
+                                    text:`${l} (${Math.round(d.datasets[0].data[i]/total*100)}%)`,
+                                    fillStyle:d.datasets[0].backgroundColor[i], hidden:false, index:i
+                                }));
+                            }
+                        }},
+                        tooltip:{backgroundColor:'rgba(13,17,23,0.95)', titleColor:'#f1f5f9', bodyColor:'#94a3b8', borderColor:'rgba(255,255,255,0.1)', borderWidth:1}
+                    }
+                }
+            });
+        }
+
+        function renderWeekly(data) {
+            if (!data.weekly_trend?.length) return;
+            const ctx = document.getElementById('weekly-chart').getContext('2d');
+            const grad = ctx.createLinearGradient(0,0,0,200);
+            grad.addColorStop(0,'rgba(99,102,241,0.3)'); grad.addColorStop(1,'rgba(99,102,241,0)');
+            new Chart(ctx, {
+                type:'line',
+                data:{
+                    labels:data.weekly_trend.map(w=>`W${w.week}`),
+                    datasets:[{
+                        data:data.weekly_trend.map(w=>w.count),
+                        borderColor:'#6366f1', backgroundColor:grad,
+                        borderWidth:2.5, tension:0.4, fill:true,
+                        pointRadius:4, pointBackgroundColor:'#6366f1', pointHoverRadius:6
+                    }]
+                },
+                options:{
+                    responsive:true, maintainAspectRatio:false,
+                    plugins:{legend:{display:false}, tooltip:{backgroundColor:'rgba(13,17,23,0.95)', titleColor:'#f1f5f9', bodyColor:'#94a3b8', borderColor:'rgba(255,255,255,0.1)', borderWidth:1}},
+                    scales:{
+                        y:{beginAtZero:true, grid:{color:GRID_COLOR}, ticks:{color:TICK_COLOR, font:{size:11}}},
+                        x:{grid:{display:false}, ticks:{color:TICK_COLOR, font:{size:10}}}
+                    }
+                }
+            });
+        }
+
+        function renderDayOfWeek(data) {
+            const order = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
+            const dow = data.day_of_week || {};
+            const counts = order.map(d => dow[d] || 0);
+            const ctx = document.getElementById('dow-chart').getContext('2d');
+
+            const colors = order.map(d => ['Saturday','Sunday'].includes(d)
+                ? 'rgba(244,63,94,0.75)' : 'rgba(59,130,246,0.75)');
+
+            new Chart(ctx, {
+                type:'bar',
+                data:{
+                    labels:order.map(d=>d.slice(0,3)),
+                    datasets:[{
+                        data:counts, backgroundColor:colors,
+                        borderRadius:6, borderSkipped:false,
+                    }]
+                },
+                options:{
+                    responsive:true, maintainAspectRatio:false,
+                    plugins:{legend:{display:false}, tooltip:{
+                        backgroundColor:'rgba(13,17,23,0.95)', titleColor:'#f1f5f9', bodyColor:'#94a3b8',
+                        borderColor:'rgba(255,255,255,0.1)', borderWidth:1
+                    }},
+                    scales:{
+                        y:{beginAtZero:true, grid:{color:GRID_COLOR}, ticks:{color:TICK_COLOR, font:{size:11}}},
+                        x:{grid:{display:false}, ticks:{color:TICK_COLOR, font:{size:11}}}
+                    }
+                }
+            });
+        }
+
+        function renderTopJunctions(data) {
+            const sorted = [...(data.top_junctions||[])].sort((a,b)=>b.count-a.count).slice(0,10);
+            if (!sorted.length) return;
+
+            // Update KPI
+            const top = sorted[0];
+            const shortName = top.junction_name.replace(/^BTP\d+\s*-\s*/,'').split(',')[0].trim();
+            document.getElementById('kpi-top-junction').textContent = shortName.length > 18 ? shortName.slice(0,16)+'…' : shortName;
+
+            const ctx = document.getElementById('junctions-chart').getContext('2d');
+            new Chart(ctx, {
+                type:'bar',
+                data:{
+                    labels:sorted.map(j => {
+                        const n = j.junction_name.replace(/^BTP\d+\s*-\s*/,'');
+                        return n.length > 28 ? n.slice(0,26)+'…' : n;
+                    }),
+                    datasets:[{
+                        data:sorted.map(j=>j.count),
+                        backgroundColor:sorted.map((_,i)=>`hsl(${210+i*10},70%,${58-i*2}%)`),
+                        borderRadius:5, borderSkipped:false,
+                    }]
+                },
+                options:{
+                    indexAxis:'y',
+                    responsive:true, maintainAspectRatio:false,
+                    plugins:{legend:{display:false}, tooltip:{
+                        backgroundColor:'rgba(13,17,23,0.95)', titleColor:'#f1f5f9', bodyColor:'#94a3b8',
+                        borderColor:'rgba(255,255,255,0.1)', borderWidth:1,
+                        callbacks:{ label: ctx => ` ${ctx.parsed.x.toLocaleString()} violations` }
+                    }},
+                    scales:{
+                        y:{grid:{display:false}, ticks:{color:'#94a3b8', font:{size:11}}},
+                        x:{beginAtZero:true, grid:{color:GRID_COLOR}, ticks:{color:TICK_COLOR, font:{size:11}}}
+                    }
+                }
+            });
+        }
+
+        async function loadAll() {
+            document.getElementById('loader').classList.add('show');
+            setStatus('Connecting to backend...', true);
+
+            try {
+                // Load time-stats and dashboard in parallel
+                const [statsRes, dashRes] = await Promise.all([
+                    fetch(`${API_BASE}/api/time-stats`),
+                    fetch(`${API_BASE}/api/dashboard`)
+                ]);
+
+                if (!statsRes.ok) throw new Error('Backend not ready');
+                const stats = await statsRes.json();
+                const dash  = dashRes.ok ? await dashRes.json() : {};
+
+                // Update KPIs
+                if (dash.total_violations) document.getElementById('kpi-total').textContent = dash.total_violations.toLocaleString();
+                if (dash.active_clusters)  document.getElementById('kpi-clusters').textContent = dash.active_clusters.toLocaleString();
+
+                // Render all charts
+                renderHourly(stats);
+                renderViolationTypes(stats);
+                renderWeekly(stats);
+                renderDayOfWeek(stats);
+                renderTopJunctions(stats);
+
+                setStatus(`Data loaded · ${dash.total_violations?.toLocaleString() || ''} records`, true);
+            } catch (e) {
+                setStatus('Backend waking up — retrying in 10s…', false);
+                setTimeout(loadAll, 10000);
+            } finally {
+                document.getElementById('loader').classList.remove('show');
+            }
+        }
+
+        loadAll();
+    </script>
+</body>
+</html>

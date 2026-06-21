@@ -1,7 +1,11 @@
 {
     "rewrites": [
         {
-            "source": "/(.*)",
+            "source": "/charts",
+            "destination": "/charts.html"
+        },
+        {
+            "source": "/",
             "destination": "/index.html"
         }
     ],
