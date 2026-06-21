@@ -77,14 +77,38 @@ def _load_synthetic_data_background():
             if not df.empty:
                 df = df.rename(columns={"violation_type": "vtype"})
 
-            app_state["df"]              = df
-            app_state["clusters"]        = clusters_df
-            app_state["time_stats"]      = data.get("time_stats", {})
-            app_state["recommendations"] = None   # Will be fetched from /api/recommendations
-            app_state["last_updated"]    = data.get("dashboard", {}).get("last_updated",
-                                            datetime.utcnow().isoformat())
-            # Stash dashboard summary for /api/dashboard endpoint
-            app_state["dashboard"]       = data.get("dashboard", {})
+            app_state["df"]         = df
+            app_state["clusters"]   = clusters_df
+            app_state["time_stats"] = data.get("time_stats", {})
+            app_state["last_updated"] = data.get("dashboard", {}).get("last_updated",
+                                         datetime.utcnow().isoformat())
+            app_state["dashboard"]  = data.get("dashboard", {})
+
+            # ── Load pre-baked recommendations if present in JSON ─────────
+            prebuilt_recs = data.get("recommendations")
+            if prebuilt_recs:
+                app_state["recommendations"] = prebuilt_recs
+                print(f"ParkIQ: Loaded {len(prebuilt_recs)} pre-baked recommendations.", flush=True)
+            else:
+                # Generate from cluster data (falls back to mock if no Groq key)
+                try:
+                    from core.recommender import generate_enforcement_recommendations
+                    if "recommended_enforcement_time" not in clusters_df.columns:
+                        clusters_df = clusters_df.copy()
+                        clusters_df["recommended_enforcement_time"] = clusters_df[
+                            "peak_hour_ratio"
+                        ].apply(lambda r: "7-9 AM and 5-8 PM" if float(r) > 0.5 else "10 AM - 4 PM")
+                    if "priority_tier" not in clusters_df.columns:
+                        clusters_df = clusters_df.copy()
+                        clusters_df["priority_tier"] = clusters_df["impact_score"].apply(
+                            lambda s: "Critical" if s >= 75 else "High" if s >= 55 else "Medium" if s >= 35 else "Low"
+                        )
+                    recs = generate_enforcement_recommendations(clusters_df, top_n=5)
+                    app_state["recommendations"] = recs
+                    print(f"ParkIQ: Generated {len(recs)} recommendations.", flush=True)
+                except Exception as rec_err:
+                    print(f"ParkIQ: Recommendations skipped — {rec_err}", flush=True)
+                    app_state["recommendations"] = None
 
             total = data.get("dashboard", {}).get("total_violations", 0)
             nclusters = len(clusters_df)
